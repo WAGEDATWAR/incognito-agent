@@ -28,10 +28,11 @@ const clear = () => security('delete-generic-password', '-s', 'incognito-acp', '
 
 // Raw behaviour of the `security` tool on this machine, so a failure on a new runner shows why. Each call is time-boxed.
 {
+  const lines = []; // one annotation for all probes: GitHub shows only the first ten annotations of a step
   const run = (label, cmd, args, opts = {}) => {
     const started = Date.now();
     const r = spawnSync(cmd, args, { encoding: 'utf8', timeout: 8000, ...opts });
-    note(`probe ${label}: ${JSON.stringify({ status: r.status, signal: r.signal, error: r.error?.code, ms: Date.now() - started, stdout: String(r.stdout ?? '').slice(0, 200), stderr: String(r.stderr ?? '').slice(0, 300) })}`);
+    lines.push(`${label}: ${JSON.stringify({ status: r.status, signal: r.signal, error: r.error?.code, ms: Date.now() - started, stdout: String(r.stdout ?? '').slice(0, 200), stderr: String(r.stderr ?? '').slice(0, 300) })}`);
     return r;
   };
   const probeArgs = ['-s', 'incognito-acp-probe', '-a', 'probe'];
@@ -60,6 +61,7 @@ const clear = () => security('delete-generic-password', '-s', 'incognito-acp', '
   run('add via script pty', 'script', ['-q', '/dev/null', 'security', '-i'], { input: `${add}quit\n` });
   run('find after script pty', 'security', ['find-generic-password', ...probeArgs, '-w']);
   del();
+  note(`probe results: ${lines.join(' | ')}`);
 }
 
 try {

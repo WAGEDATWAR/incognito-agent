@@ -79,18 +79,24 @@ jobs:
         shell: bash
         timeout-minutes: 4
         run: |
-          # A throwaway default keychain, unlocked, so the test does not depend on the runner's own state.
+          # The hosted runner has no default keychain at all ("A default keychain could not be found"), and adding an
+          # item then waits for an interactive prompt. Create one, unlock it, make it the default and the only one
+          # searched, by absolute path, and report each result as one annotation (the log itself is not readable).
           set +e
-          security create-keychain -p ci-keychain ci.keychain
-          security default-keychain -s ci.keychain
-          security unlock-keychain -p ci-keychain ci.keychain
-          security set-keychain-settings ci.keychain
-          # Lookups search the keychain list, not just the default, so put the new one first.
-          security list-keychains -d user -s ci.keychain $(security list-keychains -d user | tr -d '"')
+          KC="$HOME/Library/Keychains/ci.keychain-db"
+          {
+            security create-keychain -p ci-keychain "$KC"; echo "create: $?"
+            security unlock-keychain -p ci-keychain "$KC"; echo "unlock: $?"
+            security set-keychain-settings "$KC"; echo "settings: $?"
+            security default-keychain -d user -s "$KC"; echo "default: $?"
+            security list-keychains -d user -s "$KC"; echo "list: $?"
+            echo "default now: $(security default-keychain -d user 2>&1)"
+            echo "search list now: $(security list-keychains -d user 2>&1)"
+          } 2>&1 | tee setup.log
+          echo "::notice title=keychain setup::$(tr '\n' '|' < setup.log)"
           ACP_TEST_KEYCHAIN=1 node test/keychain.js 2>&1 | tee keychain.log
           status=${PIPESTATUS[0]}
           if [ "$status" -ne 0 ]; then
-            { grep "probe" keychain.log; tail -n 25 keychain.log; } | while IFS= read -r line; do echo "::error::${line}"; done
+            tail -n 25 keychain.log | while IFS= read -r line; do echo "::error::${line}"; done
           fi
           exit "$status"
-
