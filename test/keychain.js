@@ -26,13 +26,40 @@ const note = (m) => console.log(process.env.GITHUB_ACTIONS ? `::notice::${m}` : 
 const lookup = () => security('find-generic-password', '-s', 'incognito-acp', '-a', 'anonrouter', '-w').stdout.replace(/\r?\n$/, '');
 const clear = () => security('delete-generic-password', '-s', 'incognito-acp', '-a', 'anonrouter');
 
-// Raw output of the exact commands the agent relies on, so a failure on a new machine shows why.
+// Raw behaviour of the `security` tool on this machine, so a failure on a new runner shows why. Each call is time-boxed.
 {
-  const probe = spawnSync('security', ['-i'], { timeout: 20000, input: 'add-generic-password -U -s "incognito-acp-probe" -a "probe" -w "probe-secret-123"\n', encoding: 'utf8' });
-  note('probe add: ' + JSON.stringify({ status: probe.status, stdout: probe.stdout, stderr: probe.stderr }));
-  const found = security('find-generic-password', '-s', 'incognito-acp-probe', '-a', 'probe', '-w');
-  note('probe find: ' + JSON.stringify({ status: found.status, stdout: found.stdout, stderr: found.stderr }));
-  note('probe delete: ' + JSON.stringify({ status: security('delete-generic-password', '-s', 'incognito-acp-probe', '-a', 'probe').status }));
+  const run = (label, cmd, args, opts = {}) => {
+    const started = Date.now();
+    const r = spawnSync(cmd, args, { encoding: 'utf8', timeout: 8000, ...opts });
+    note(`probe ${label}: ${JSON.stringify({ status: r.status, signal: r.signal, error: r.error?.code, ms: Date.now() - started, stdout: String(r.stdout ?? '').slice(0, 200), stderr: String(r.stderr ?? '').slice(0, 300) })}`);
+    return r;
+  };
+  const probeArgs = ['-s', 'incognito-acp-probe', '-a', 'probe'];
+  const del = () => spawnSync('security', ['delete-generic-password', ...probeArgs], { timeout: 8000 });
+
+  run('default-keychain', 'security', ['default-keychain']);
+  run('list-keychains', 'security', ['list-keychains', '-d', 'user']);
+  run('find missing item', 'security', ['find-generic-password', '-s', 'incognito-acp-nonexistent', '-w']);
+
+  // Control: the plain command with the secret in argv (for diagnosis only). Does adding to this keychain work at all?
+  run('add via argv', 'security', ['add-generic-password', '-U', ...probeArgs, '-w', 'probe-secret-argv']);
+  run('find after argv add', 'security', ['find-generic-password', ...probeArgs, '-w']);
+  del();
+
+  // The agent's approach, with and without an explicit quit, through a shell pipe, and under a pseudo-terminal.
+  const add = 'add-generic-password -U -s "incognito-acp-probe" -a "probe" -w "probe-secret-stdin"\n';
+  run('add via -i (no quit)', 'security', ['-i'], { input: add });
+  run('find after -i (no quit)', 'security', ['find-generic-password', ...probeArgs, '-w']);
+  del();
+  run('add via -i (with quit)', 'security', ['-i'], { input: `${add}quit\n` });
+  run('find after -i (with quit)', 'security', ['find-generic-password', ...probeArgs, '-w']);
+  del();
+  run('add via shell pipe', '/bin/sh', ['-c', `printf '%s' 'add-generic-password -U -s "incognito-acp-probe" -a "probe" -w "probe-secret-pipe"' | security -i`]);
+  run('find after shell pipe', 'security', ['find-generic-password', ...probeArgs, '-w']);
+  del();
+  run('add via script pty', 'script', ['-q', '/dev/null', 'security', '-i'], { input: `${add}quit\n` });
+  run('find after script pty', 'security', ['find-generic-password', ...probeArgs, '-w']);
+  del();
 }
 
 try {

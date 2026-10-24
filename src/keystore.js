@@ -56,7 +56,7 @@ export function protect(backend, provider, key, run = spawnSync) {
     }
     if (backend === 'keychain') {
       if (KEYCHAIN_UNSAFE.test(key)) return null;
-      const command = `add-generic-password -U -s ${securityQuote(SERVICE)} -a ${securityQuote(provider.id)} -l ${securityQuote(`Incognito ACP (${provider.title})`)} -w ${securityQuote(key)}\n`;
+      const command = `add-generic-password -U -s ${securityQuote(SERVICE)} -a ${securityQuote(provider.id)} -l ${securityQuote(`Incognito ACP (${provider.title})`)} -w ${securityQuote(key)}\nquit\n`;
       run('security', ['-i'], { input: command, encoding: 'utf8', timeout: 20000 });
       // `security -i` does not report a rejected command through its exit status, so confirm by reading the key back.
       return keychainLookup(run, provider) === key ? { scheme: 'keychain' } : null;

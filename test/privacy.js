@@ -11,6 +11,10 @@ import { anonrouter } from '../src/providers/anonrouter.js';
 import { venice } from '../src/providers/venice.js';
 import { say, sse, startClient, startMock, tmpDir, toolCall } from './helpers.js';
 
+// Unit tests must never write to a developer's real Keychain or keyring (the service and account names are the real ones).
+// Windows DPAPI only writes into the throwaway home folder, so it stays on; test/keyring.js and test/keychain.js are the gated real-store checks.
+if (process.platform !== 'win32') process.env.ACP_KEY_STORAGE = 'file';
+
 const GH = `ghp_${'a1B2c3D4e5'.repeat(4)}`; // 40 chars, GitHub token shape
 
 // ---- Redactor ----

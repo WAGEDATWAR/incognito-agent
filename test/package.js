@@ -6,6 +6,10 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { root, tmpDir } from './helpers.js';
 
+// Unit tests must never write to a developer's real Keychain or keyring (the service and account names are the real ones).
+// Windows DPAPI only writes into the throwaway home folder, so it stays on; test/keyring.js and test/keychain.js are the gated real-store checks.
+if (process.platform !== 'win32') process.env.ACP_KEY_STORAGE = 'file';
+
 const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
 const dest = tmpDir();
 const npm = process.platform === 'win32' ? 'npm.cmd' : 'npm';
