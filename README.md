@@ -85,8 +85,8 @@ Lookup order: `<PREFIX>_API_KEY` environment variable, then the credentials file
 | | Windows | macOS | Linux |
 |---|---|---|---|
 | Sign-in dialog | PowerShell password box | `osascript` dialog with hidden input | `zenity`, else `kdialog`, else `yad` (needs a display) |
-| Saved key protection | DPAPI (your Windows account) | file readable only by you (Keychain not used yet) | desktop keyring through `secret-tool` when installed and running, else a file readable only by you |
-| Tested | by hand, and in CI | command construction in CI; the dialog itself is untested | command construction in CI; a real keyring round trip in a separate CI job |
+| Saved key protection | DPAPI (your Windows account) | login Keychain through the `security` tool | desktop keyring through `secret-tool` when installed and running, else a file readable only by you |
+| Tested | by hand, and in CI | the Keychain round trip in a separate CI job; the dialog itself is untested | command construction in CI; a real keyring round trip in a separate CI job |
 
 Where no dialog can be shown (an SSH session, a remote development host, a machine with no display or no dialog program), the agent says so and points to the terminal: run `npx anonrouter-venice-acp anonrouter login` (or `venice login`) there, or set `ANONROUTER_API_KEY` / `VENICE_API_KEY`. IDEs that support terminal sign-in are offered it as an option in that case. In IntelliJ's remote development the agent runs on the backend host, so Node and the key belong on that machine. JetBrains does not support ACP agents under WSL.
 
@@ -198,7 +198,7 @@ The agents talk only to the provider you configure (plus the control server in A
 
 **Sensitive and blocked files.** Files that usually hold credentials (`.env*` except `.env.example`, `*.pem`/`*.key`, SSH keys, `.aws`, `.npmrc`, `credentials.json`, `acp.json` and similar) always ask before the model may read or change them, in every mode except Bypass. The prompt offers Allow once or Deny only, never "always allow", and what you allow is still redacted. Searches skip these files. This agent's own saved data (`~/.anonrouter-acp`, `~/.venice-acp`) is blocked outright, so the model can never read your key file or chat history. Paths outside the project also ask, even for reads.
 
-**Your saved API key is protected.** On Windows it is encrypted with DPAPI, tied to your Windows account; on Linux it goes in the desktop keyring through `secret-tool` when that is installed. A copied or backed-up `credentials.json` then holds no usable key. An older plaintext file is converted the first time it is read. Elsewhere (and with `ACP_KEY_STORAGE=file`) the key stays in a file readable only by you. macOS Keychain is not used yet, because its command line takes the secret as an argument that other processes could briefly see. Keys given by environment variable are used as they are. Keys are masked in logs and error messages.
+**Your saved API key is protected.** On Windows it is encrypted with DPAPI, tied to your Windows account; on macOS it goes in your login Keychain; on Linux it goes in the desktop keyring through `secret-tool` when that is installed and running. A copied or backed-up `credentials.json` then holds no usable key. An older plaintext file is converted the first time it is read. Elsewhere, or if the keychain or keyring is unavailable (a locked Keychain, an SSH session), and with `ACP_KEY_STORAGE=file`, the key stays in a file readable only by you. On macOS the key reaches the `security` tool through its standard input (`security -i`), never as a command-line argument another process could see. Keys given by environment variable are used as they are. Keys are masked in logs and error messages.
 
 **Chat history.** Saved chats are deleted after 30 days (`<P>_SESSION_RETENTION_DAYS`, `0` keeps them until the 50-chat limit), live in a folder only you can read, and hold redacted text. `/forget` deletes the current chat from disk and stops saving it; `/forget all` deletes every saved chat. `<P>_SAVE_SESSIONS=off` saves nothing.
 
@@ -224,13 +224,13 @@ The agents talk only to the provider you configure (plus the control server in A
 Three more scripts are run on demand:
 
 - `npm run test:package` packs the project and runs the tarball through npx, as the registry launches it.
-- `npm run test:keyring` round-trips a key through a real Linux keyring. It only runs with `ACP_TEST_KEYRING=1` inside a session that has one; the CI `keyring` job does that.
+- `npm run test:keyring` and `npm run test:keychain` round-trip a key through a real Linux keyring or macOS Keychain. They only run with `ACP_TEST_KEYRING=1` / `ACP_TEST_KEYCHAIN=1` on a machine that has one; the CI `keyring` and `keychain` jobs do that.
 - `npm run test:live` talks to the real Anonrouter and Venice APIs (model list, a streamed reply with the cost meter, a tool call, a reasoning effort, Anonrouter's private tickets) using your keys, and spends a few cents. A provider without a key is skipped.
 
 ## Not yet verified
 
 - **IDE rendering.** Confirmed by the author in IntelliJ IDEA 2026.2: permission prompts, the mode selector, the context meter and thought display render natively in AI Chat. JetBrains doesn't document this for custom agents, so other IDE versions are untested.
-- **Key protection and redaction in practice.** DPAPI protection was tested by hand on Windows; the Linux keyring path is exercised by a CI job rather than on a machine of the author's. macOS dialogs and Linux dialogs have not been clicked through by anyone. Redaction patterns are tuned to avoid false positives but have not been run over a large real codebase, and how the IDE shows the "sensitive file" prompt is unconfirmed.
+- **Key protection and redaction in practice.** DPAPI protection was tested by hand on Windows; the Linux keyring and the macOS Keychain are exercised by CI jobs rather than on machines of the author's. macOS dialogs and Linux dialogs have not been clicked through by anyone. Redaction patterns are tuned to avoid false positives but have not been run over a large real codebase, and how the IDE shows the "sensitive file" prompt is unconfirmed.
 - **Provider support.** A model without tool-calling support will chat but can't edit files. Anonrouter's docs don't say which models support tools or streaming.
 
 ## License

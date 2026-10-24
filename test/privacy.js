@@ -57,7 +57,9 @@ const GH = `ghp_${'a1B2c3D4e5'.repeat(4)}`; // 40 chars, GitHub token shape
   const calls = [];
   const run = (cmd, args, opts) => { calls.push({ cmd, args, opts }); return { status: 0, stdout: 'ab12cd', error: undefined }; };
   assert.equal(chooseBackend({ platform: 'win32', env: {} }), 'dpapi');
-  assert.equal(chooseBackend({ platform: 'darwin', env: {} }), 'file');
+  assert.equal(chooseBackend({ platform: 'darwin', env: {}, run }), 'keychain');
+  assert.equal(chooseBackend({ platform: 'darwin', env: {}, run: () => ({ error: new Error('ENOENT') }) }), 'file');
+  assert.equal(chooseBackend({ platform: 'freebsd', env: {} }), 'file');
   assert.equal(chooseBackend({ platform: 'win32', env: { ACP_KEY_STORAGE: 'file' } }), 'file');
   assert.equal(chooseBackend({ platform: 'linux', env: {}, run }), 'secret-tool');
   assert.equal(chooseBackend({ platform: 'linux', env: {}, run: () => ({ error: new Error('ENOENT'), status: null }) }), 'file');
@@ -72,6 +74,41 @@ const GH = `ghp_${'a1B2c3D4e5'.repeat(4)}`; // 40 chars, GitHub token shape
   assert.equal(calls[0].opts.env.ACP_SECRET, 'ar_secret_value_123');
   assert.equal(protect('dpapi', anonrouter, 'k', () => ({ status: 1, stdout: '' })), null); // failure falls back to plaintext
   assert.equal(unprotect({ scheme: 'secret-tool' }, anonrouter, () => ({ status: 0, stdout: 'the-key\n' })), 'the-key');
+
+  // macOS Keychain: the key travels on stdin to `security -i`, never in argv, and storing is confirmed by reading it back.
+  {
+    const log = [];
+    const stored = { value: null };
+    const fakeSecurity = (cmd, args, opts) => {
+      log.push({ cmd, args, opts });
+      if (args[0] === 'find-generic-password') return stored.value ? { status: 0, stdout: `${stored.value}\n` } : { status: 44, stdout: '' };
+      if (args[0] === '-i') {
+        const m = /-w "((?:[^"\\]|\\.)*)"/.exec(opts.input);
+        stored.value = m ? m[1].replace(/\\(.)/g, '$1') : null; // what a real shell-style parser would read
+        return { status: 0 };
+      }
+      return { status: 0 };
+    };
+    const tricky = 'ar_has"quote\\and-backslash_1234567890';
+    assert.deepEqual(protect('keychain', anonrouter, tricky, fakeSecurity), { scheme: 'keychain' });
+    assert.equal(stored.value, tricky, 'quoting did not round-trip');
+    assert.ok(!JSON.stringify(log.map((c) => c.args)).includes('has'), 'secret leaked into argv');
+    const add = log.find((c) => c.args[0] === '-i');
+    assert.deepEqual(add.args, ['-i']);
+    assert.match(add.opts.input, /^add-generic-password -U -s "incognito-acp" -a "anonrouter" -l "Incognito ACP \(Anonrouter\)" -w "/);
+    assert.ok(add.opts.input.endsWith('\n'));
+    assert.equal(unprotect({ scheme: 'keychain' }, anonrouter, fakeSecurity), tricky);
+
+    // Never stored (the tool rejected the command): treated as a failure, so the file fallback is used.
+    assert.equal(protect('keychain', anonrouter, 'ar_abcdefghijklmnop12345', () => ({ status: 0, stdout: '' })), null);
+    // A key that cannot be quoted safely is not handed over at all.
+    log.length = 0;
+    assert.equal(protect('keychain', anonrouter, 'bad\nkey', fakeSecurity), null);
+    assert.equal(log.length, 0);
+    // Missing item or a locked keychain reads as "no key".
+    assert.equal(unprotect({ scheme: 'keychain' }, anonrouter, () => ({ status: 44, stdout: '' })), null);
+    assert.equal(unprotect({ scheme: 'keychain' }, anonrouter, () => { throw new Error('boom'); }), null);
+  }
   assert.equal(unprotect({ scheme: 'dpapi', apiKeyEncrypted: 'zz' }, anonrouter, () => ({ status: 1, stdout: '' })), null);
 }
 

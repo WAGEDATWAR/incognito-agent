@@ -64,3 +64,30 @@ jobs:
             tail -n 25 keyring.log | while IFS= read -r line; do echo "::error::${line}"; done
           fi
           exit "$status"
+
+  # Another path the matrix cannot exercise: a real macOS Keychain through the security tool.
+  keychain:
+    name: keychain (macos, security)
+    runs-on: macos-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+      - name: Round-trip a key through the real Keychain
+        shell: bash
+        run: |
+          # A throwaway default keychain, unlocked, so the test does not depend on the runner's own state.
+          set +e
+          security create-keychain -p ci-keychain ci.keychain
+          security default-keychain -s ci.keychain
+          security unlock-keychain -p ci-keychain ci.keychain
+          security set-keychain-settings ci.keychain
+          ACP_TEST_KEYCHAIN=1 node test/keychain.js 2>&1 | tee keychain.log
+          status=${PIPESTATUS[0]}
+          if [ "$status" -ne 0 ]; then
+            tail -n 25 keychain.log | while IFS= read -r line; do echo "::error::${line}"; done
+          fi
+          exit "$status"
+

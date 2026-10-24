@@ -4,6 +4,12 @@ All notable changes to this project are recorded here. The format follows [Keep 
 
 ## [Unreleased]
 
+### Changed
+- `ROADMAP.md` rewritten as the final plan (before release, after release, suggestions, known limits, decisions); completed work moved to `docs/ROADMAP-ARCHIVE.md`.
+
+### Added
+- **macOS Keychain** storage for the saved API key, added through `security -i` so the key never appears on a command line, with the same plaintext-file migration as on Windows and Linux. A CI job round-trips a key through a real Keychain.
+
 ## [0.2.1] - 2026-10-23
 
 ### Changed

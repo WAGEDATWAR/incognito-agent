@@ -22,5 +22,5 @@ The two icons here come from your own SVGs, normalized for that:
 
 - The drafts already point at `WAGEDATWAR/incognito-agent`; update the four URLs in each `agent.json` if the repository is ever renamed or moved.
 - Bump `version` and the pinned `package` together with `package.json` (the test fails if they drift).
-- The ids (`anonrouter`, `venice`) and the npm package name are meant to change with the rebrand in the roadmap; do that first.
+- The ids (`anonrouter`, `venice`) and the npm package name are meant to change with the rebrand (B1 in the roadmap), and the marks need the owners' permission or a neutral replacement (B2); settle both first.
 - The Anonrouter and Venice marks are those companies' trademarks. Get their permission, or switch to a neutral mark, before listing publicly.

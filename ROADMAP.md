@@ -1,102 +1,178 @@
-# Roadmap to a public release
+# Roadmap (final)
 
-Ordered by dependency and payoff: do earlier items first. Sizes are relative effort: **S** is a few hours, **M** about a day or two, **L** a week or more. Items marked ✅ are already done.
+This is the complete plan from here to a public release and beyond. What has already been built and why lives in [docs/ROADMAP-ARCHIVE.md](docs/ROADMAP-ARCHIVE.md); the changelog records releases.
 
-## The publishing decision (decided: ACP Registry only)
+**Where things stand (v0.2.1, tagged locally).** Anonrouter and Venice agents with modes and native approvals, routing and privacy settings, private tickets, MCP, images, resumable chats, slash commands, secret redaction, sensitive-file rules, OS-protected key storage, retention and `/forget`. 17 test suites plus packaging, real-keyring, real-Keychain (new), and live-provider checks. CI green on Windows, macOS and Linux. Not yet published anywhere.
 
-You chose the registry route. The Marketplace plugin (Phase 6) stays an optional upgrade for later.
-
-"The JetBrains marketplace" is two different things, and they have very different costs.
-
-| Route | What it is | Effort | What it gets you |
-|---|---|---|---|
-| **A. ACP Registry** (recommended) | Pull request to [agentclientprotocol/registry](https://github.com/agentclientprotocol/registry). Users install from AI Assistant's agent list (IDE 2025.3.2+). | **S–M** | Listing with icon in the agent dropdown, one-click install, automatic version updates from npm. No IDE plugin. |
-| **B. Marketplace plugin** | A Kotlin/Gradle IntelliJ Platform plugin on plugins.jetbrains.com. | **L** | A Settings → Tools page. Ongoing compatibility work for each IDE release. |
-
-Settings → Tools can only come from route B. The registry route has no settings UI, but items 13–14 give most of the benefit inside AI Chat's own menus, which the IDE already renders for these agents. Recommendation: ship route A first; build B only if you still want the settings page afterwards.
-
-**Registry requirements** (from the registry's CONTRIBUTING and FORMAT docs):
-- A folder `<id>/` with `agent.json` and a required `icon.svg`.
-- `agent.json` needs `id`, `name`, `version` (plain `X.Y.Z`), `description`, `license_url` and a `distribution`.
-- Distribution is `npx` (pinned npm version, no `@latest`), `uvx`, or `binary` archives.
-- Icon must be exactly **16×16, square, monochrome**: `fill` and `stroke` may only be `currentColor`, `none` or `inherit`. Full-colour brand logos are rejected.
-- CI starts the agent and requires `authMethods` from `initialize` with at least one of type `agent` or `terminal`. We already return one when no key is saved. Environment-variable auth is not accepted.
-- An hourly job picks up new versions from npm and GitHub Releases, so after the first PR, releases are automatic.
+**How to read it**
+- Sizes: **S** a few hours, **M** a day or two, **L** a week or more.
+- `[decision]` needs your call before work starts. `[suggestion]` is my addition and may not be what you want; cut freely. `[plugin]` is configuration that is painful without a settings page; each has an interim form (file, chat command or AI Chat menu) so it is not blocked on the plugin.
+- Within each section, items are in the order I would do them.
 
 ---
 
-## Phase 0: landed this session
+## 1. Before release
 
-1. ✅ **Tool-call limit no longer dead-ends a turn.** At the limit (`<P>_MAX_TOOL_CALLS`, default 40 rounds) the agent now asks "Used N tool rounds. Keep going?" through the native approval prompt. `<P>_ON_TOOL_LIMIT` sets the behaviour: `ask` (default), `continue` (auto, with a hard ceiling of 10× the limit) or `stop`. Bypass mode continues without asking. Covered by `test/toollimit.js`.
+The gate for the first public listing. Nothing here is optional except where marked.
 
-## Phase 1: cleanup (S)
+### Identity and distribution
 
-2. ✅ **Remove `<P>_THINKING` and its code.** Delete the `card` mode: `ThinkingCard`, `wrapForCard`, the `thinking` config key, and the README rows. Keep `ThoughtBuffer`, since it is what makes thoughts render correctly. Update the tests that touch it.
-3. ✅ **Remove `<P>_AUTO_APPROVE` and `<P>_APPROVAL`.** Drop the legacy mapping in `src/cli.js` and the README rows. `<P>_MODE` remains the single switch. This is a breaking change, so bump the minor version and note it in the changelog.
-4. ✅ **Fix the three skipped review findings** (all small): kill the whole process tree on Windows for the no-terminal command fallback; guard `search_files` against catastrophic regexes (run with a time budget); serialize prompts per session.
+**B1. Rebrand to Incognito: Privacy-first multi-agent ACP** (M) `[decision]`. Do this first: the npm name, repository name, registry ids, data folders and icons all follow from it, and they are hard to change after listing.
+- Names: `incognito-acp`, `incognito-agents`, `acp-incognito` and `incognito-ai` were free on npm when checked. Pick one and reserve it by publishing early (see B4).
+- "Incognito" is also Chrome's private-mode name: run a trademark and search check, avoid Chrome-like iconography, keep the descriptive subtitle and the "unofficial" notice.
+- Registry ids and display names, for example `incognito-anonrouter` and `incognito-venice`, shown as "Incognito (Anonrouter)" and "Incognito (Venice)". Rename the GitHub repository only if it changes (the current one is already `incognito-agent`).
+- Keep the `ANONROUTER_` and `VENICE_` variable prefixes; add a shared `INCOGNITO_` prefix for cross-provider settings (redaction, retention, network boundary). Accept the old names for one release.
+- Move saved data from `~/.anonrouter-acp` and `~/.venice-acp` to one `~/.incognito-acp/` folder with a one-time migration, including the Keychain, keyring and DPAPI entries and the `sessions/` folder. The blocked-paths list in `src/sensitive.js` already includes `.incognito-acp`.
+- Update the README title, package name and bins, launcher usage text, registry drafts, test expectations and the changelog.
 
-## Phase 2: correctness gaps found in the API research (S–M)
+**B2. Brand-mark permission or a neutral icon** (S) `[decision]`. The Anonrouter and Venice marks are their owners' trademarks. Either get a clear OK from both, or use a neutral Incognito mark for the listing and keep the provider names in text only. A neutral mark also removes any suggestion of endorsement. The icon pipeline and `test/icons.js` already handle either choice.
 
-5. ✅ **Read Anonrouter's capability flags properly.** This answers your streaming/tool-calling question: both are in `GET /v1/models` under `capabilities` (`streaming`, `tools`, plus `vision`, `max_images`, `web`, `embeddings`). The same data appears camelCased (`supportsStreaming`, `supportsTools`) in the response's `routing_catalog`. Live numbers for your account: 205 text models, all stream; 186 support tools and 19 don't. We already mark tool-less models via `tools`, but should also (a) label them "(no tools)" in the picker like Venice, (b) fall back to non-streaming if a model ever reports `streaming: false`, and (c) optionally hide tool-less models by default.
-6. ✅ **Anonrouter reasoning efforts are currently ignored.** `capabilities.reasoning` is an object (`supported`, `effort_configurable`, `supported_efforts`, `can_disable`, `always_on`), but `parseModels` treats it as a boolean, so Anonrouter models never get the Reasoning effort menu Venice has. Parse it, send `reasoning_effort` (docs also accept `reasoning: {enabled, effort}`), offer `none` only when `can_disable`, and map the 400 errors (`reasoning_not_disableable` and friends) to plain messages.
-7. ✅ **Venice end-to-end encrypted models.** The Venice list includes `e2ee-*` models. They likely need client-side encryption we don't implement and will fail. Verify, then hide them until supported.
-8. ✅ **Use `max_output_tokens` and context data.** Cap `max_tokens` per model, and use Anonrouter's `context_admission` data for the context meter instead of an estimate.
-9. ✅ **Sessions that survive a restart.** Implement `loadSession` and session listing so chats resume after the IDE restarts. Persist history to `~/.<provider>-acp/sessions/`. Also persist "Always allow" choices per project if wanted.
-10. ✅ **MCP support.** JetBrains passes configured MCP servers (and optionally the IntelliJ MCP server) in `session/new`; we ignore them and advertise no MCP capability. Implement an MCP stdio client that exposes those tools to the model. This is the biggest functional gap against other registry agents.
-11. ✅ **Image input.** Vision models report `vision`; set `promptCapabilities.image` per model and pass attached images as `image_url` parts.
-12. ✅ **Smaller ACP features.** `plan` updates (the checklist UI), `available_commands_update` (slash commands such as `/clear`), and a visible rate-limit retry notice plus stalled-stream timeout. You declined the last two earlier; I would revisit them before a public release, since strangers will hit provider rate limits.
+**B3. Registry submission** (S–M). Copy `registry/<id>/` into a fork of `agentclientprotocol/registry`, run its validator (`uv run --with jsonschema .github/workflows/build_registry.py`) and its auth check (`python3 .github/workflows/verify_agents.py --auth-check --agent <id>`), then open the pull request. Needs B1, B2 and B4 done first, because the pinned npm version must already exist. After the first merge the registry follows new npm versions on its own.
 
-## Phase 3: provider-specific settings (M), done
+**B4. npm publishing and the release process** (M).
+- Create the npm account with two-factor authentication, reserve the package name, and add `publishConfig` with public access.
+- Publish from CI with provenance: a release workflow that runs on a version tag, runs every test, then `npm publish --provenance` using GitHub's trusted publishing (no long-lived npm token stored in the repository), and creates the GitHub release from the changelog entry.
+- Branch protection on `main` (require the CI jobs), signed tags `[suggestion]`, and a software bill of materials attached to each release `[suggestion]` (small, because there are no runtime dependencies).
+- First public version `[decision]`: `1.0.0` signals stability to strangers; `0.3.0` is more honest about how little has run on other people's machines. I lean to `0.3.0` for the first listing and `1.0.0` after B18 has been exercised by a few outside users.
 
-Built as AI Chat menus plus environment variables, persisted to `~/.<provider>-acp/settings.json`. Findings from the live API: streaming responses only carry `x-anonrouter-selected-model` and `x-anonrouter-routing` (the documented provider, privacy and fallback headers did not appear), so the serving provider is read from the model ID and its privacy tier from the model list; and `usage` arrives in the stream without asking for it.
+**B5. Docs for strangers** (S–M). Rewrite the README around the three things a newcomer needs: install from the registry, paste your key, what it does with your data. Move the long reference (every variable, the proxy, the test notes) below that or into `docs/`. Add: a short "what is sent where" table; advice to use the sign-in dialog or the keychain rather than putting a key in `acp.json`'s `env` block (where it sits in plain text); a troubleshooting section (Node missing, key dialog not showing, models not listed, tool calls not working on a model); CONTRIBUTING and issue templates `[suggestion]`; screenshots of the mode menu, a diff approval and the context meter `[suggestion]`.
 
-These only matter if the settings have a home. Without a settings page, expose them as AI Chat config-option menus (the Model, Mode and Reasoning menus already work this way), persisted to `~/.<provider>-acp/settings.json`.
+**B6. Repository settings** (S). Turn on private vulnerability reporting (so `SECURITY.md`'s link works), GitHub secret scanning with push protection, Dependabot alerts and security updates, and require CI before merging. Confirm the copyright line in `LICENSE` (it says "WAGEDATWAR"; use your legal name if you prefer).
 
-13. ✅ **Anonrouter routing settings: justified.** The chat endpoint takes a `provider` object that changes cost, privacy and reliability: `minimum_privacy` (`anonymous`, `private`, `tee`, `e2ee`), `order`, `only`, `ignore`, `allow_fallbacks`, `sort` (`privacy`, `price`, `latency`, `throughput`), `max_price` (USD per million tokens, input and output), `require_parameters` and `max_attempts` (1–3). Suggested variables: `ANONROUTER_MIN_PRIVACY`, `ANONROUTER_PROVIDER_ORDER`/`_ONLY`/`_IGNORE` (comma lists), `ANONROUTER_ALLOW_FALLBACKS`, `ANONROUTER_SORT`, `ANONROUTER_MAX_PRICE_INPUT`/`_OUTPUT`, `ANONROUTER_MAX_ATTEMPTS`. **Default `require_parameters` to true**, since an agent needs tool support and Auto routing may otherwise pick a route without it. The menus should be at least Minimum privacy and Sort.
-14. ✅ **Surface what Anonrouter did.** Responses carry `x-anonrouter-selected-model`, `-provider`, `-privacy-class`, `-provider-fallback` and `-provider-attempts`. Show the provider and privacy class in a short note or the usage panel. Add privacy class to model names in the picker. Translate routing errors (`no_provider_route_meets_privacy`, `no_provider_route_meets_price`, `provider_fallback_exhausted`) into plain advice. Report per-model pricing as the `cost` field of `usage_update`.
-15. ✅ **Venice extras.** Beyond the existing web search and system prompt variables: `enable_web_scraping`, `enable_x_search`, `enable_web_citations`, `strip_thinking_response`, and showing the `x-venice-balance-usd` / `-diem` headers. Done: all four switches are environment variables, web search also has a menu, and the balance shows in `/status`.
-16. ✅ **Anonrouter inference tickets (stretch).** The documented privacy-preserving flow (`POST /v1/inference/tickets`, then `x-anonrouter-ticket`). Done as the Request mode menu and `ANONROUTER_TICKETS`; the SDK's own client source documented the exact fields (ticket body: `model`, `provider`, `max_completion_tokens`, `reasoning_effort`; completion carries only the ticket header, no key). Checked live, including a tool-call round trip.
+**B7. Decide the completion proxy's fate** (S) `[decision]`. It works but depends on a model that can improvise fill-in-the-middle through chat, must be started by hand, and is Anonrouter-only. Options: ship it as a clearly experimental extra (current state); move it to its own small package so it never confuses the agent's listing; or drop it until the plugin can manage it. Whatever you choose, mark it experimental in the README.
 
-## Phase 4: branding and packaging (S–M)
+### Security and correctness fixes from the final review
 
-17. ✅ **Icons.** Done: your two SVGs are normalized to plain 16x16 monochrome icons in `registry/anonrouter/icon.svg` and `registry/venice/icon.svg` (details in `registry/README.md`), with draft `agent.json` files and `test/icons.js` to keep them valid. Still open: permission from the owners of the two marks (or switch to the neutral mark planned in 17a), and replacing `OWNER/REPO` in the drafts once the repository exists.
-17a. **Rebrand to Incognito: Privacy-first multi-agent ACP.** A clearer name than listing providers, it fits one package bundling several agents (and leaves room for more), and it would carry over as the name of a Marketplace plugin. Do it before the GitHub repository is created and before the registry PR, because the npm name, repo name and registry ids are hard to change afterwards. Checklist: (1) npm names `incognito-acp`, `incognito-agents`, `acp-incognito` and `incognito-ai` were all free when checked; (2) "Incognito" is also the name of Chrome's private browsing mode, so run a trademark and search check, avoid Chrome-like iconography, and keep the descriptive subtitle and the "unofficial" notice; (3) registry ids and display names, for example `incognito-anonrouter` / `incognito-venice` shown as "Incognito (Anonrouter)" and "Incognito (Venice)"; (4) keep the `ANONROUTER_` and `VENICE_` variable prefixes, and consider a shared `INCOGNITO_` prefix for cross-provider settings (secret redaction, retention); (5) move saved data from `~/.anonrouter-acp` and `~/.venice-acp` to one `~/.incognito-acp/` folder, with a one-time migration; (6) use a generic privacy mark for the icon instead of the providers' brand logos, which also removes the logo-permission question in item 17; (7) update the README title, package name and bins, the launcher usage text, and the repo name and description.
-18. ✅ **Make it installable with npx** (done except the checks marked below). One package, `anonrouter-venice-acp` (free on npm when checked; rename in `package.json` if you prefer a scope), with a bin named like the package so `npx anonrouter-venice-acp anonrouter` and `... venice` work with no `-p` flag; registry entries use `args: ["anonrouter"]` and `args: ["venice"]`. Also exposes `anonrouter-acp`, `venice-acp` and the completion proxy. `files` ships only `bin`, `src`, the README and the LICENSE; the version reported to clients comes from `package.json`; the README no longer contains machine paths. `npm run test:package` packs the project and runs the tarball through npx: contents, handshake for both providers, `--version`, the usage error and `login`. Terminal auth: the ACP schema says terminal-auth `args` are *appended* to the configured launch, while the registry's own doc says they replace it, so `login` works after a provider name and, with no provider name, asks which one on a terminal. The agent offers terminal sign-in only to clients that advertise `auth.terminal` and only where no dialog can be shown (a headless Linux or remote host); everywhere else the paste dialog is the method. Still to confirm by hand: that JetBrains provisions Node for npx agents on a machine without it, and which of append or replace the IDE actually does.
-19. ✅ **Repository and licence.** Done: public repository at https://github.com/WAGEDATWAR/incognito-agent, MIT `LICENSE` (copyright line "WAGEDATWAR"; change it to your legal name if you prefer), `.gitignore` and `.gitattributes`, `repository`/`bugs`/`homepage` in `package.json`, `CHANGELOG.md`, and `SECURITY.md` (turn on private vulnerability reporting under the repository's Security settings so its "Report a vulnerability" link works). The `v0.2.0` tag waits for the first real release, since the rebrand in 17a will change the package name and version.
-20. ✅ **CI.** Written, not yet run on GitHub: `.github/workflows/ci.yml` runs `npm test` and the pack-and-npx test on Ubuntu, Windows and macOS with Node 20 and 22. Actions are pinned to commit hashes, and `.github/dependabot.yml` proposes updates weekly. Watch the first run; the Linux and macOS jobs have never been exercised on a real machine, so expect to fix a test or two.
-21. **Registry submission.** Fork the registry, add `anonrouter/` and `venice/` folders with `agent.json` and `icon.svg`, run the registry's local validator (`uv run --with jsonschema .github/workflows/build_registry.py`) and its auth check, then open the PR.
+These are real gaps I found reading the code again. Each is small, and each should have a test.
 
-## Privacy and security features (added during Phase 4)
+**B8. Resolve symlinks and Windows aliases before checking paths** (S). The sensitive, blocked and outside-project checks compare the path as written. A symlink inside the project that points at `~/.ssh/id_rsa` or at this agent's credentials passes every check, and so do Windows short names (`PROGRA~1`) and trailing-dot names. Resolve with `fs.realpath` (native on Windows) before classifying, for reads and for the directory of a file that does not exist yet.
 
-Built, all tested: secret redaction with restore-on-use (and placeholders only in saved chats); credential-like files ask every time and are never "always allowed"; this agent's own data is blocked from tools; OS-protected API key storage with migration; keys masked in logs and errors; chat retention (30 days by default), `/forget` and `/forget all`, and a private chat folder; a client-side privacy floor for Venice to match Anonrouter's `minimum_privacy`; the README's Privacy and security section documents the limits honestly.
+**B9. Keep the agent's own keys out of child processes** (S). Commands run by the no-terminal fallback and every MCP server inherit the agent's environment, including `ANONROUTER_API_KEY` and `VENICE_API_KEY` when they come from `acp.json`. A third-party MCP server would receive them. Strip our provider keys (and `ACP_SECRET`) from the environment handed to children, unless an MCP server's own `env` entry sets them.
 
-Ideas not done yet, roughly by value:
+**B10. Never overwrite a file that changed after the preview** (S). `edit_file` and `write_file` write the content computed when the preview was made. If you keep typing in the file while the approval prompt is open (or the model's earlier step touched it), the write replaces your newer text. Re-read at write time and refuse, with a clear message, if the file is no longer what was previewed.
 
-- **macOS Keychain** for the saved key, once the secret can be passed without a command-line argument.
-- **Risky-command guard.** Ask before patterns like `rm -rf`, `git push --force`, `curl ... | sh` and `sudo`, even in Bypass mode, unless switched off.
-- **Encrypt saved chats at rest** with a key held in the OS store, for people who keep history.
-- **Release integrity.** Publish with npm provenance (`npm publish --provenance` from CI), pin Actions by hash, add `SECURITY.md` with a disclosure address, and generate a software bill of materials. The package has no runtime dependencies, which keeps this small.
-- **Secret scanning in CI** (for example gitleaks) and a pre-commit hook, so a real key never lands in the repository.
-- **Per-project rules.** A reviewable allow-list file (`.incognito/rules.json`) for approvals you want remembered across sessions, in place of the session-only "Always allow".
-- **Network boundary.** A startup check that only the configured provider, control origin and MCP servers are contacted, and a `--offline-models` style option for fully local providers.
-- **Prompt-injection hygiene.** Wrap file, web and MCP output in clear delimiters and tell the model it is untrusted data, and ask before the model follows an instruction that came from tool output.
+**B11. File size and binary guards** (S). `read_file` loads whole files and returns binary data as text. Refuse binary files (NUL bytes) and files over a few megabytes unless a line range is given; read ranges by streaming; suggest the right tool in the error.
 
-## Phase 5: release hygiene (S–M)
+**B12. Tell the model its environment** (S). The system prompt names the project folder but not the operating system, shell, today's date or whether the folder is a git repository. On Windows the agent runs commands through `cmd.exe`, while models write bash. Add those facts to the prompt, add a `<P>_SHELL` setting (cmd, PowerShell, or an explicit path) `[plugin]` with the setting as an environment variable or menu until then, and use the IDE terminal's shell when the client reports it.
 
-22. ✅ **Key storage.** Done for Windows (DPAPI) and Linux (`secret-tool`), with automatic migration of plaintext files and a 0600 file elsewhere; see the privacy section below. Left: macOS Keychain, which needs a way to pass the secret without putting it in a command line.
-23. ✅ **Platform coverage.** Done: the sign-in dialog tries `zenity`, `kdialog` then `yad` on Linux, checks that a display and a program exist, never shows over SSH, and points to `login` when it can't (terminal sign-in is offered to IDEs that support it); `test/dialog.js` checks the command for each platform, quoting, cancel and timeout with stand-ins (and parses the Windows PowerShell script on Windows); a CI `keyring` job round-trips a key through a real Linux keyring; the README has a Platforms section including the WSL and remote-development notes. Not possible here: clicking through the macOS and Linux dialogs, and macOS Keychain storage (see the privacy list). The `keyring` CI job now passes against a real keyring (the first version failed on the keyring setup; the fix unlocks it with a throwaway password and reports failures as annotations).
-24. ✅ **Test debt.** Done: `test/tools.js` now covers every tool, including search limits and skips, diff previews that leave the disk untouched, unsaved editor buffers, IDE terminals and cancellation, sensitivity and blocked-file rules, and plan updates (writing it found that `search_files` accepted a missing pattern; fixed). `test/fixtures.js` runs both parsers against real entries captured from the live APIs (`test/fixtures/`). `npm run test:live` checks the real providers (model list, streamed reply and cost, a tool call, a reasoning effort, Anonrouter tickets); it passed for both providers and costs a few cents per run. Refresh the fixtures if a provider changes its list format.
-25. **Docs for strangers.** Rewrite the README around "install from the registry, paste your key", with the manual `acp.json` setup as a fallback section. Add a privacy note: what is sent to which provider, and that nothing is collected by the agent.
+**B13. Survive a full context window** (M). Today the agent only drops old tool outputs. A long chat eventually gets the provider's "context length exceeded" error and stops. Detect that error for both providers, compact automatically (reusing `/compact`) and retry; start compacting early (around 80% of the window) with a short note; and calibrate the characters-per-token estimate from the provider's reported usage.
 
-## Phase 6: optional marketplace plugin (L)
+**B14. Risky-command guard** (S–M). Ask before obviously destructive or exfiltrating commands even in Accept edits and Bypass modes: recursive deletes, `git push --force` and `git reset --hard`, `curl ... | sh`, `sudo`, writes to system folders, disk formatting. A setting turns it off for people who want a truly hands-off Bypass. Show why the prompt appeared.
 
-26. **Settings → Tools page.** A Kotlin plugin with an `applicationConfigurable` page covering the environment variables as fields: key, default model, mode, tool-call limit, routing settings. It would write the agent entries into `~/.jetbrains/acp.json`, since JetBrains offers no documented API for registering agents. It needs a Marketplace vendor account, plugin signing, a supported-IDE build range and a review before listing, then maintenance against each IDE release. Do this only after route A is live and if the settings page is still worth it.
+**B15. `logout` and `purge` commands** (S). Counterparts to `login`: `logout` removes the saved key (including the Keychain, keyring or DPAPI entry), `purge` also deletes chats and settings. A privacy-first tool should be able to remove everything it stored, from a terminal, in one step.
+
+**B16. Secret scanning in CI and a pre-commit hook** (S). Run the project's own redactor (and optionally gitleaks) over staged and pushed files so a real key never lands in the repository; allow-list the deliberate fake keys in tests.
+
+**B17. Atomic writes and multi-window safety** (S). `settings.json` and `credentials.json` are written in place; two IDE windows (two agent processes) can interleave. Write to a temporary file and rename, as the chat files already do, and re-read settings when they change.
+
+### Verification
+
+**B18. Hands-on pass before announcing** (M). Things CI cannot confirm, to check by hand and record in the README's "Not yet verified" section: install from a clean machine through the registry, including that JetBrains provisions Node for npx agents and whether it appends or replaces terminal-auth arguments; how the "sensitive file" prompt, the mode menus, the cost in the context meter and `/forget` look in the IDE; the macOS Keychain and dialogs on a real Mac, and the Linux dialogs and keyring on a real desktop; behavior over SSH and in remote development; a long session near the context limit; and cancelling during each kind of tool call.
 
 ---
 
-## Suggested order of work
+## 2. After release
 
-1. Items 2–4 (cleanup and review fixes), then 5–7 (API correctness). These are small and unblock everything else.
-2. Items 18–21 to get on the registry quickly, with 17 in parallel since it depends on the brand owners' replies.
-3. Items 9–11 and 13–14 as 0.3.x releases, since they're the biggest quality jump.
-4. Phases 5 and 6 as needed.
+### Everyday use
+
+**N1. Project instructions** (M). Read `AGENTS.md` from the project root (the convention most ACP agents follow) and an optional user-level file, and add them to the system prompt, after redaction. Treat a repository's instructions as untrusted input: the first time a project's file is used, show it and ask; never let it change approvals or settings.
+
+**N2. `doctor` command and a debug log** (S–M). `npx <package> doctor` prints what support needs: Node version, platform, whether a key is found and how it is protected, which dialog program exists, whether each provider answers and how many models it lists, terminal-auth capability. A `<P>_DEBUG=1` switch writes a scrubbed protocol log to a file for bug reports (note: tool-call updates carry restored values, so the log is scrubbed again on write).
+
+**N3. Loop guard and tolerant tool arguments** (S). Stop (or ask) when the model repeats an identical failing call several times. Repair near-miss JSON arguments (trailing commas, single quotes, unescaped newlines) before giving up.
+
+**N4. Better file tools** (M). A `find_files` tool (by name pattern); search and listing that respect `.gitignore`; `delete_file`, `move_file` and `create_dir` tools with the proper ACP kinds and approvals; an optional multi-edit and patch tool to save round trips; line numbers in `read_file` output when asked.
+
+**N5. Additional directories** (S). Honor `additionalDirectories` from the IDE's session setup (multi-root projects) as "inside the project", so files there are not flagged as outside.
+
+**N6. Custom OpenAI-compatible provider** (M). A third built-in adapter configured by URL and key (environment or settings file), covering local servers such as Ollama and LM Studio, which suits the "Incognito" name best: nothing leaves the machine. This is what "leaves room for more agents" means in practice; adding well-known hosted providers after that is one adapter each.
+
+**N7. Fast startup** (S). Decrypting the saved key on Windows takes over a second (a PowerShell call) and blocks the first reply to the IDE. Check only that a protected key exists at startup and decrypt on first use.
+
+**N8. Spending guard** (S–M). A per-session (and optional daily) cost limit using the cost estimate already computed: warn at a threshold, ask before going past it, stop at a hard cap.
+
+**N9. Model menu usability** (S–M). Group the 100-plus models (by family or privacy tier, using ACP's grouped options), and add a `<P>_MODELS` allow-list or favorites setting `[plugin]` to keep the menu short. Optionally pin sensible defaults per provider.
+
+**N10. MCP lifecycle** (M). Close MCP servers of chats that went idle, reconnect a server that died, refresh tool lists when a server announces a change, support the SSE transport, and show per-server status in `/status`.
+
+**N11. Parallel read-only tool calls** (S). Run independent reads and searches from one model turn concurrently, keeping results in order.
+
+**N12. Session niceties** (S). Titles written by the model after the first exchange, pagination for long session lists, and `session/close` if the protocol gains it.
+
+**N13. Protocol conformance test** (M). Validate every message the agent sends against the official ACP JSON schema (a development-only dependency or a small hand-written checker), so a spec change or an editing slip cannot silently break the IDE.
+
+**N14. Plan-mode hand-off and questions** (S–M) `[suggestion]`. When a plan is ready, propose switching to Accept edits through a prompt (ACP's `switch_mode` kind); an `ask_user` tool that uses the protocol's elicitation request, where the IDE supports it, for clarifying questions with options.
+
+### Trust and privacy
+
+All of these were accepted. Items marked `[plugin]` need a settings page to be pleasant; the interim form is listed so they can ship first.
+
+**P1. Per-project rules** (M) `[plugin]`. Remember approvals across sessions: "always allow `npm test` here", "never touch `infra/`". Design constraint: rules must never come from the repository itself, or a cloned project could pre-approve its own attack; they live in the user's data folder keyed by project path, and any rule that would allow more than reads is shown for confirmation when created. Interim: a user-level rules file plus a `/rules` chat command to list, add and remove entries; the plugin later gives it an editor.
+
+**P2. Network boundary** (M) `[plugin]`. Enforce that the agent talks only to an allow-list of hosts: by default the configured provider, the control origin and the MCP servers the IDE passed, plus anything the user adds. Implemented by routing every outbound request through one guarded function, with a clear message when something is blocked and the active list shown in `/status`. Interim: an environment variable or settings-file list; the plugin later gives it a table editor. (Commands run by the model are outside this boundary and still need approval.)
+
+**P3. Encrypt saved chats at rest** (M). Keep a per-user key in the OS store (DPAPI, Keychain or keyring) and encrypt the chat files, for people who keep history but do not want it readable by backup tools or other accounts. Off by default if it makes migration or support harder; on by default if it proves transparent.
+
+**P4. Prompt-injection hygiene** (M). Wrap file, search, web and MCP output in clear delimiters and tell the model it is untrusted data; ask before acting on an instruction that appeared only in tool output (for example a file telling the model to run a command); never let tool output change a mode or setting.
+
+**P5. Transparency log** (M) `[suggestion]`. A local record per chat of what was sent where: provider, route and privacy tier, how many secrets were redacted, token counts, and which files were read. Shown through `/log` and exportable. This makes the "privacy-first" claim checkable instead of just stated.
+
+**P6. Custom redaction patterns and allow-list** (S–M) `[plugin]`. Let users add their own secret patterns (internal token formats) and exempt known-safe strings that look like secrets. Interim: a small JSON file.
+
+**P7. Confidential routes** (L) `[suggestion]`. Verify TEE attestation and support end-to-end encrypted models for both providers (Anonrouter's `e2ee` class, Venice's `e2ee-*` models, currently hidden). Needs client-side cryptography, probably the providers' own SDKs, which conflicts with the no-dependencies rule, so it may belong in an optional companion package.
+
+**P8. Release integrity extras** (S) `[suggestion]`. Reproducible package contents check in CI, a documented way to verify a download against its provenance, and pinning of every GitHub Action stays enforced by Dependabot (already in place).
+
+**P9. Log hygiene** (S). The IDE's own ACP logs can contain tool-call updates, which carry real values after secrets are restored for local display. Document how to redact before sharing logs, and consider sending placeholders instead of restored values in titles and raw inputs where the IDE does not need them.
+
+### The plugin (only if you still want it after release)
+
+A Kotlin plugin on the Marketplace, built after the agent has users. It needs a vendor account, signing, an IDE build range and a review, then upkeep with each IDE release. It can write the agent entries into `~/.jetbrains/acp.json` (there is no documented API for registering agents) and give these a real home:
+
+- **PL1.** Settings → Tools page for every environment variable (key, default model, mode, tool-call limit, routing, privacy floors, retention, shell).
+- **PL2.** Editor for per-project rules (P1) and the network boundary (P2).
+- **PL3.** Key management: sign in, sign out, see where the key is stored, and run `purge`.
+- **PL4.** Editor for custom redaction patterns (P6).
+- **PL5.** Completion proxy manager: start, stop, show status (B7).
+- **PL6.** Status-bar widget showing provider, privacy tier and session cost `[suggestion]`.
+- **PL7.** Transparency log viewer (P5) `[suggestion]`.
+
+---
+
+## 3. Suggestions (cut freely)
+
+Things I think are worth considering but that you may not want:
+
+- **Web fetch tool** `[suggestion]`: let the model read a URL, off by default, asking per domain, with its output treated as untrusted (P4). Venice and Anonrouter already offer provider-side web search.
+- **Custom slash commands** from markdown files in the user's data folder.
+- **Prompted tools** for the roughly 10% of models without native tool calling (wrapping tool use in plain text). It widens the model list but is less reliable; "(no tools)" models are honest about their limits today.
+- **Prompt caching** where a provider supports it (Venice lists cached-input pricing), to cut cost on long chats.
+- **Background commands** for dev servers and watchers, with a way to list and stop them.
+- **Anonrouter balance** through a management key (`arm_`) in `/status`.
+- **Sampling settings** (temperature, top-p) per model.
+- **Notebook files** and other structured editors; **image files** as tool results for vision models.
+- **Localization** of the agent's own messages and dialogs.
+- **A documentation site** (GitHub Pages) once the README outgrows one page.
+
+---
+
+## 4. Known limits (documented, not planned)
+
+- Redaction is pattern-based; a secret with no recognizable shape that was never configured can get through, and images are sent as they are.
+- `run_command` runs as you and can read anything you can; approvals, the risky-command guard and the sensitive-file rules reduce the risk but are not a sandbox.
+- MCP servers are code you chose to run, and receive their tool arguments with real values restored.
+- The provider you choose decides what happens to your data after it arrives; the privacy tier shown is the provider's claim.
+- The agent makes no network calls of its own besides the provider, ticket control server and MCP servers, and never checks for updates; users update through the registry or npm.
+- JetBrains does not support ACP agents under WSL.
+
+---
+
+## 5. Decisions needed from you
+
+1. **Name** (B1): which package name and registry ids, and whether to keep the existing repository name.
+2. **Marks** (B2): ask the owners, or use a neutral icon.
+3. **First version** (B4): `0.3.0` or `1.0.0`.
+4. **Completion proxy** (B7): keep, split out, or drop.
+5. **Copyright holder** (B6): handle or legal name.
+6. **Plugin** (section 2): go or no-go, decided after real users exist.
+7. **Contributions** (B5): accept outside pull requests (a CONTRIBUTING file and maybe a DCO), or keep the project closed.
