@@ -1,7 +1,7 @@
 {
   "id": "anonrouter",
   "name": "Anonrouter",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Unofficial agent that runs Anonrouter models in AI Chat, with routing and privacy controls, private tickets, secret redaction and MCP support.",
   "repository": "https://github.com/WAGEDATWAR/incognito-agent",
   "website": "https://github.com/WAGEDATWAR/incognito-agent#readme",
@@ -11,7 +11,7 @@
   "icon": "https://raw.githubusercontent.com/WAGEDATWAR/incognito-agent/main/registry/anonrouter/icon.svg",
   "distribution": {
     "npx": {
-      "package": "anonrouter-venice-acp@0.2.0",
+      "package": "anonrouter-venice-acp@0.2.1",
       "args": ["anonrouter"]
     }
   }

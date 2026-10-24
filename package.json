@@ -1,6 +1,6 @@
 {
   "name": "anonrouter-venice-acp",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Unofficial Agent Client Protocol (ACP) agents for JetBrains IDEs that run Anonrouter and Venice models",
   "keywords": [
     "acp",

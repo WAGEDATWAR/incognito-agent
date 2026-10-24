@@ -4,6 +4,8 @@ All notable changes to this project are recorded here. The format follows [Keep 
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-10-23
+
 ### Changed
 - Repository set up with CI, a security policy, and registry drafts. The project is being renamed to Incognito; see `ROADMAP.md`.
 
