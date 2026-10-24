@@ -4,6 +4,8 @@ All notable changes to this project are recorded here. The format follows [Keep 
 
 ## [Unreleased]
 
+## [0.2.2] - 2026-10-24
+
 ### Added
 - **macOS Keychain** storage for the saved API key, added through `security -i` so the key never appears on a command line, with the same plaintext-file migration as on Windows and Linux. A CI job round-trips a key through a real Keychain.
 - `ACP_KEYCHAIN` to name a specific macOS keychain file, for sessions with no default keychain (headless machines, CI).
