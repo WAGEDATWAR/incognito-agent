@@ -40,8 +40,10 @@
   },
   "scripts": {
     "start": "node bin/anonrouter-venice-acp.js",
-    "test": "node test/e2e.js && node test/approval.js && node test/toollimit.js && node test/tools.js && node test/serialize.js && node test/features.js && node test/sessions.js && node test/mcp.js && node test/routing.js && node test/tickets.js && node test/privacy.js && node test/icons.js && node test/venice.js && node test/auth.js && node test/proxy.js",
-    "test:package": "node test/package.js"
+    "test": "node test/e2e.js && node test/approval.js && node test/toollimit.js && node test/tools.js && node test/serialize.js && node test/features.js && node test/sessions.js && node test/mcp.js && node test/routing.js && node test/tickets.js && node test/privacy.js && node test/icons.js && node test/fixtures.js && node test/venice.js && node test/auth.js && node test/dialog.js && node test/proxy.js",
+    "test:package": "node test/package.js",
+    "test:keyring": "node test/keyring.js",
+    "test:live": "node test/live.js"
   },
   "license": "MIT"
 }

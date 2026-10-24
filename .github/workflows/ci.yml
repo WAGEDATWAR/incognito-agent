@@ -30,3 +30,25 @@ jobs:
         run: npm test
       - name: Pack the package and run it through npx
         run: npm run test:package
+
+  # The one path the matrix above cannot exercise: a real Linux keyring through secret-tool.
+  keyring:
+    name: keyring (ubuntu, secret-tool)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+      - name: Install a keyring
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libsecret-tools gnome-keyring dbus-x11
+      - name: Round-trip a key through the real keyring
+        run: |
+          dbus-run-session -- bash -c '
+            eval "$(echo -n "" | gnome-keyring-daemon --unlock --components=secrets)"
+            export GNOME_KEYRING_CONTROL
+            ACP_TEST_KEYRING=1 node test/keyring.js
+          '

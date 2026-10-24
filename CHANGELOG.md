@@ -7,6 +7,13 @@ All notable changes to this project are recorded here. The format follows [Keep 
 ### Changed
 - Repository set up with CI, a security policy, and registry drafts. The project is being renamed to Incognito; see `ROADMAP.md`.
 
+### Added
+- Sign-in dialog fallbacks: `kdialog` and `yad` after `zenity` on Linux, a check that a dialog program and display actually exist, and no dialog over SSH. Where none can be shown, the agent points to `login`.
+- Tests: every tool (including diff previews, unsaved editor buffers and IDE terminals), the sign-in dialog on each platform, the model-list parsers against captured real data, a real-keyring CI job, and an opt-in live test (`npm run test:live`).
+
+### Fixed
+- `search_files` called without a pattern now says so instead of matching every line.
+
 ## [0.2.0] - 2026-10-23
 
 First version with both providers, packaged as one npm package with a launcher for each agent.

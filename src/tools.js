@@ -122,6 +122,7 @@ export class ToolRunner {
       }
       case 'search_files': {
         const abs = this.resolve(args.path || '.');
+        if (typeof args.pattern !== 'string' || !args.pattern) throw new Error('pattern is required');
         new RegExp(args.pattern); // reject an invalid pattern up front, before approval and before the worker starts
         return { ...base, title: `Search "${args.pattern}" in ${this.display(abs)}`, locations: [{ path: abs }],
           execute: async (signal) => ({ output: await this.search(abs, args, signal) }) };

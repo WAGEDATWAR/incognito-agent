@@ -1,4 +1,4 @@
-import { spawn } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 
 const windowsScript = (title, label) => `
 Add-Type -AssemblyName System.Windows.Forms
@@ -35,34 +35,66 @@ $f.Add_Shown({ $f.Activate(); $t.Focus() })
 if ($f.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) { [Console]::Out.Write($t.Text) }
 `;
 
-function run(command, args, timeoutMs) {
+const defaults = { platform: process.platform, env: process.env, spawn, spawnSync };
+
+function run(command, args, timeoutMs, deps = defaults) {
   return new Promise((resolve) => {
     let out = '';
     let p;
-    try { p = spawn(command, args, { stdio: ['ignore', 'pipe', 'ignore'], windowsHide: false }); }
+    try { p = deps.spawn(command, args, { stdio: ['ignore', 'pipe', 'ignore'], windowsHide: false }); }
     catch { return resolve(null); }
     const timer = setTimeout(() => p.kill(), timeoutMs);
     p.stdout.on('data', (d) => { out += d; });
     p.on('error', () => { clearTimeout(timer); resolve(null); });
-    p.on('close', () => { clearTimeout(timer); resolve(out.trim() || null); });
+    p.on('close', () => { clearTimeout(timer); resolve(out.trim() || null); }); // cancelling a dialog prints nothing
   });
 }
 
-/** Can a native dialog be shown here? False on a headless Linux box (SSH session, remote dev host, CI). */
-export function hasGui() {
-  return process.platform !== 'linux' || !!(process.env.DISPLAY || process.env.WAYLAND_DISPLAY);
+// Linux dialog programs, in order of preference. The first one that is installed is used.
+const LINUX_TOOLS = [
+  { command: 'zenity', args: (title, label) => ['--entry', '--hide-text', `--title=${title}`, `--text=${label}`] },
+  { command: 'kdialog', args: (title, label) => ['--password', label, '--title', title] },
+  { command: 'yad', args: (title, label) => ['--entry', '--hide-text', `--title=${title}`, `--text=${label}`] },
+];
+const toolCache = new Map();
+
+function findLinuxTool(deps) {
+  const key = `${deps.platform}:${deps.env.PATH ?? ''}`;
+  if (!toolCache.has(key) || deps !== defaults) {
+    const found = LINUX_TOOLS.find((t) => {
+      const r = deps.spawnSync(t.command, ['--version'], { stdio: 'ignore', timeout: 3000 });
+      return !r.error && r.status === 0;
+    }) ?? null;
+    if (deps === defaults) toolCache.set(key, found); else return found;
+  }
+  return toolCache.get(key);
 }
 
-/** Shows a native "paste your key" dialog. Resolves to the key, or null if cancelled/unavailable. */
-export function promptKeyDialog(title, timeoutMs = 5 * 60 * 1000) {
+const appleScriptString = (s) => `"${String(s).replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`;
+
+/** The program and arguments that show the dialog on this machine, or null when none can be shown. */
+export function dialogCommand(title, deps = defaults) {
   const label = `Paste your ${title} API key:`;
-  if (process.platform === 'win32') {
+  if (deps.env.SSH_CONNECTION || deps.env.SSH_TTY) return null; // nobody is at this machine's screen
+  if (deps.platform === 'win32') {
     const encoded = Buffer.from(windowsScript(title, label), 'utf16le').toString('base64');
-    return run('powershell.exe', ['-NoProfile', '-NonInteractive', '-STA', '-WindowStyle', 'Hidden', '-EncodedCommand', encoded], timeoutMs);
+    return { command: 'powershell.exe', args: ['-NoProfile', '-NonInteractive', '-STA', '-WindowStyle', 'Hidden', '-EncodedCommand', encoded] };
   }
-  if (process.platform === 'darwin') {
-    const script = `text returned of (display dialog "${label}" default answer "" with hidden answer with title "${title}")`;
-    return run('osascript', ['-e', script], timeoutMs);
+  if (deps.platform === 'darwin') {
+    return { command: 'osascript', args: ['-e', `text returned of (display dialog ${appleScriptString(label)} default answer "" with hidden answer with title ${appleScriptString(title)})`] };
   }
-  return run('zenity', ['--entry', '--hide-text', `--title=${title}`, `--text=${label}`], timeoutMs);
+  if (!(deps.env.DISPLAY || deps.env.WAYLAND_DISPLAY)) return null; // headless: no display to draw on
+  const tool = findLinuxTool(deps);
+  return tool ? { command: tool.command, args: tool.args(title, label) } : null;
+}
+
+/** Can a native dialog be shown here? False on a headless Linux box, a remote host, or one with no dialog program. */
+export function hasGui(deps = defaults) {
+  return dialogCommand('x', deps) !== null;
+}
+
+/** Shows a native "paste your key" dialog. Resolves to the key, or null if cancelled or unavailable. */
+export function promptKeyDialog(title, timeoutMs = 5 * 60 * 1000, deps = defaults) {
+  const cmd = dialogCommand(title, deps);
+  return cmd ? run(cmd.command, cmd.args, timeoutMs, deps) : Promise.resolve(null);
 }

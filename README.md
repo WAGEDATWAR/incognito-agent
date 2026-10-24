@@ -80,6 +80,16 @@ If no key is found, the agent shows a native password dialog the first time you 
 
 Lookup order: `<PREFIX>_API_KEY` environment variable, then the credentials file. To save a key by hand, run `npx anonrouter-venice-acp anonrouter login` (or `venice login`) in a terminal. On a machine with no display, such as a remote host, IDEs that support terminal sign-in are offered a "log in in a terminal" option that does the same. The saved key is protected by your operating system where possible (see Privacy and security).
 
+## Platforms
+
+| | Windows | macOS | Linux |
+|---|---|---|---|
+| Sign-in dialog | PowerShell password box | `osascript` dialog with hidden input | `zenity`, else `kdialog`, else `yad` (needs a display) |
+| Saved key protection | DPAPI (your Windows account) | file readable only by you (Keychain not used yet) | desktop keyring through `secret-tool` when installed and running, else a file readable only by you |
+| Tested | by hand, and in CI | command construction in CI; the dialog itself is untested | command construction in CI; a real keyring round trip in a separate CI job |
+
+Where no dialog can be shown (an SSH session, a remote development host, a machine with no display or no dialog program), the agent says so and points to the terminal: run `npx anonrouter-venice-acp anonrouter login` (or `venice login`) there, or set `ANONROUTER_API_KEY` / `VENICE_API_KEY`. IDEs that support terminal sign-in are offered it as an option in that case. In IntelliJ's remote development the agent runs on the backend host, so Node and the key belong on that machine. JetBrains does not support ACP agents under WSL.
+
 ## Environment variables
 
 Set these in the agent's `env` block in `acp.json`. `<P>` is `ANONROUTER` or `VENICE`.
@@ -209,13 +219,18 @@ The agents talk only to the provider you configure (plus the control server in A
 
 ## Test
 
-`npm test` runs fifteen suites (and `npm run test:package` packs the project and runs the tarball through npx, as the registry launches it) against fake providers and a fake IDE: the agent loop with a retried stream failure, modes and approvals (deny, always allow, cancel, plan, bypass, outside-project reads), the tool-call limit policy, tool internals (regex time limit, process-tree kill), overlapping prompts, capability parsing, images, slash commands, stalls and retries, saved sessions, MCP over stdio and HTTP, routing settings, route notes and cost, private tickets (key and content on separate origins), secret redaction, sensitive-file rules, key protection, retention and `/forget`, the Venice privacy floor, the Venice adapter, the missing-key flow, and the completion proxy.
+`npm test` runs seventeen suites against fake providers and a fake IDE: the agent loop with a retried stream failure, modes and approvals (deny, always allow, cancel, plan, bypass, outside-project reads), the tool-call limit policy, every tool (reading, listing, searching with its limits, writing and editing with diff previews, unsaved editor buffers, IDE terminals, sensitivity flags, plan updates, killing a cancelled command's process tree), overlapping prompts, capability parsing, images, slash commands, stalls and retries, saved sessions, MCP over stdio and HTTP, routing settings, route notes and cost, private tickets (key and content on separate origins), secret redaction, sensitive-file rules, key protection, retention and `/forget`, the Venice privacy floor, icon and registry-draft rules, the model-list parsers against real entries captured from both providers (`test/fixtures`), the missing-key flow, the sign-in dialog on each platform, and the completion proxy.
+
+Three more scripts are run on demand:
+
+- `npm run test:package` packs the project and runs the tarball through npx, as the registry launches it.
+- `npm run test:keyring` round-trips a key through a real Linux keyring. It only runs with `ACP_TEST_KEYRING=1` inside a session that has one; the CI `keyring` job does that.
+- `npm run test:live` talks to the real Anonrouter and Venice APIs (model list, a streamed reply with the cost meter, a tool call, a reasoning effort, Anonrouter's private tickets) using your keys, and spends a few cents. A provider without a key is skipped.
 
 ## Not yet verified
 
 - **IDE rendering.** Confirmed by the author in IntelliJ IDEA 2026.2: permission prompts, the mode selector, the context meter and thought display render natively in AI Chat. JetBrains doesn't document this for custom agents, so other IDE versions are untested.
-- **Venice live chat.** Only Venice's public model list was checked against the live API; chat, tool calling and reasoning were tested against a mock, since no Venice key was used.
-- **Key protection and redaction in practice.** DPAPI protection was tested on Windows only; the Linux `secret-tool` path is tested with a stand-in command, not a real keyring. Redaction patterns are tuned to avoid false positives but have not been run over a large real codebase, and how the IDE shows the "sensitive file" prompt is unconfirmed.
+- **Key protection and redaction in practice.** DPAPI protection was tested by hand on Windows; the Linux keyring path is exercised by a CI job rather than on a machine of the author's. macOS dialogs and Linux dialogs have not been clicked through by anyone. Redaction patterns are tuned to avoid false positives but have not been run over a large real codebase, and how the IDE shows the "sensitive file" prompt is unconfirmed.
 - **Provider support.** A model without tool-calling support will chat but can't edit files. Anonrouter's docs don't say which models support tools or streaming.
 
 ## License
