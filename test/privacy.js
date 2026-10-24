@@ -103,6 +103,18 @@ const GH = `ghp_${'a1B2c3D4e5'.repeat(4)}`; // 40 chars, GitHub token shape
     assert.ok(add.opts.input.endsWith('\n'));
     assert.equal(unprotect({ scheme: 'keychain' }, anonrouter, fakeSecurity), tricky);
 
+    // ACP_KEYCHAIN names a specific keychain for every command (a Mac with no default keychain in the session).
+    process.env.ACP_KEYCHAIN = '/Users/ci/Library/Keychains/ci.keychain-db';
+    try {
+      log.length = 0;
+      assert.deepEqual(protect('keychain', anonrouter, 'ar_pathcheck1234567890abcd', fakeSecurity), { scheme: 'keychain' });
+      assert.ok(log.find((c) => c.args[0] === '-i').opts.input.endsWith(' "/Users/ci/Library/Keychains/ci.keychain-db"\nquit\n'));
+      assert.equal(log.find((c) => c.args[0] === 'find-generic-password').args.at(-1), '/Users/ci/Library/Keychains/ci.keychain-db');
+    } finally { delete process.env.ACP_KEYCHAIN; }
+    log.length = 0;
+    protect('keychain', anonrouter, 'ar_nopath1234567890abcdefg', fakeSecurity);
+    assert.ok(!log.find((c) => c.args[0] === 'find-generic-password').args.includes('/Users/ci/Library/Keychains/ci.keychain-db'));
+
     // Never stored (the tool rejected the command): treated as a failure, so the file fallback is used.
     assert.equal(protect('keychain', anonrouter, 'ar_abcdefghijklmnop12345', () => ({ status: 0, stdout: '' })), null);
     // A key that cannot be quoted safely is not handed over at all.

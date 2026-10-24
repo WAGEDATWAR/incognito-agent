@@ -23,12 +23,14 @@ const { anonrouter } = await import('../src/providers/anonrouter.js');
 const security = (...args) => spawnSync('security', args, { encoding: 'utf8', timeout: 20000 });
 // In CI each line becomes a visible annotation, even if the job is later cancelled for running too long.
 const note = (m) => console.log(process.env.GITHUB_ACTIONS ? `::notice::${m}` : m);
-const lookup = () => security('find-generic-password', '-s', 'incognito-acp', '-a', 'anonrouter', '-w').stdout.replace(/\r?\n$/, '');
-const clear = () => security('delete-generic-password', '-s', 'incognito-acp', '-a', 'anonrouter');
+const kc = () => (process.env.ACP_KEYCHAIN ? [process.env.ACP_KEYCHAIN] : []);
+const lookup = () => security('find-generic-password', '-s', 'incognito-acp', '-a', 'anonrouter', '-w', ...kc()).stdout.replace(/\r?\n$/, '');
+const clear = () => security('delete-generic-password', '-s', 'incognito-acp', '-a', 'anonrouter', ...kc());
 
 // Raw behaviour of the `security` tool on this machine, so a failure on a new runner shows why. Each call is time-boxed.
 {
   const lines = []; // one annotation for all probes: GitHub shows only the first ten annotations of a step
+  const kc = process.env.ACP_KEYCHAIN ? [process.env.ACP_KEYCHAIN] : [];
   const run = (label, cmd, args, opts = {}) => {
     const started = Date.now();
     const r = spawnSync(cmd, args, { encoding: 'utf8', timeout: 8000, ...opts });
@@ -36,30 +38,24 @@ const clear = () => security('delete-generic-password', '-s', 'incognito-acp', '
     return r;
   };
   const probeArgs = ['-s', 'incognito-acp-probe', '-a', 'probe'];
-  const del = () => spawnSync('security', ['delete-generic-password', ...probeArgs], { timeout: 8000 });
+  const del = () => spawnSync('security', ['delete-generic-password', ...probeArgs, ...kc], { timeout: 8000 });
 
-  run('default-keychain', 'security', ['default-keychain']);
-  run('list-keychains', 'security', ['list-keychains', '-d', 'user']);
-  run('find missing item', 'security', ['find-generic-password', '-s', 'incognito-acp-nonexistent', '-w']);
+  lines.push(`ACP_KEYCHAIN=${kc[0] ?? '(unset)'}`);
+  run('default keychain (dynamic domain)', 'security', ['default-keychain']);
+  run('default keychain (user domain)', 'security', ['default-keychain', '-d', 'user']);
 
-  // Control: the plain command with the secret in argv (for diagnosis only). Does adding to this keychain work at all?
-  run('add via argv', 'security', ['add-generic-password', '-U', ...probeArgs, '-w', 'probe-secret-argv']);
-  run('find after argv add', 'security', ['find-generic-password', ...probeArgs, '-w']);
+  // Control: the plain command with the secret in argv (for diagnosis only), naming the keychain explicitly.
+  run('add via argv', 'security', ['add-generic-password', '-U', ...probeArgs, '-w', 'probe-secret-argv', ...kc]);
+  run('find after argv add', 'security', ['find-generic-password', ...probeArgs, '-w', ...kc]);
   del();
 
-  // The agent's approach, with and without an explicit quit, through a shell pipe, and under a pseudo-terminal.
-  const add = 'add-generic-password -U -s "incognito-acp-probe" -a "probe" -w "probe-secret-stdin"\n';
+  // The agent's approach: commands on stdin to `security -i`, with the keychain named the same way.
+  const add = `add-generic-password -U -s "incognito-acp-probe" -a "probe" -w "probe-secret-stdin"${kc.length ? ` "${kc[0]}"` : ''}\n`;
   run('add via -i (no quit)', 'security', ['-i'], { input: add });
-  run('find after -i (no quit)', 'security', ['find-generic-password', ...probeArgs, '-w']);
+  run('find after -i (no quit)', 'security', ['find-generic-password', ...probeArgs, '-w', ...kc]);
   del();
   run('add via -i (with quit)', 'security', ['-i'], { input: `${add}quit\n` });
-  run('find after -i (with quit)', 'security', ['find-generic-password', ...probeArgs, '-w']);
-  del();
-  run('add via shell pipe', '/bin/sh', ['-c', `printf '%s' 'add-generic-password -U -s "incognito-acp-probe" -a "probe" -w "probe-secret-pipe"' | security -i`]);
-  run('find after shell pipe', 'security', ['find-generic-password', ...probeArgs, '-w']);
-  del();
-  run('add via script pty', 'script', ['-q', '/dev/null', 'security', '-i'], { input: `${add}quit\n` });
-  run('find after script pty', 'security', ['find-generic-password', ...probeArgs, '-w']);
+  run('find after -i (with quit)', 'security', ['find-generic-password', ...probeArgs, '-w', ...kc]);
   del();
   note(`probe results: ${lines.join(' | ')}`);
 }

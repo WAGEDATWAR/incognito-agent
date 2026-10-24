@@ -94,6 +94,8 @@ jobs:
             echo "search list now: $(security list-keychains -d user 2>&1)"
           } 2>&1 | tee setup.log
           echo "::notice title=keychain setup::$(tr '\n' '|' < setup.log)"
+          # The session has no default keychain, so name the one just created.
+          export ACP_KEYCHAIN="$KC"
           ACP_TEST_KEYCHAIN=1 node test/keychain.js 2>&1 | tee keychain.log
           status=${PIPESTATUS[0]}
           if [ "$status" -ne 0 ]; then

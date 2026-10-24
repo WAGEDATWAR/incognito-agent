@@ -215,6 +215,7 @@ The agents talk only to the provider you configure (plus the control server in A
 | `<P>_REDACT_SECRETS` / `ACP_REDACT_SECRETS` | on | `off` sends text unredacted. |
 | `<P>_SESSION_RETENTION_DAYS` | `30` | Days to keep saved chats; `0` keeps them until pushed out by the 50-chat limit. |
 | `ACP_KEY_STORAGE` | auto | `file` stores the key in a 0600 file even where OS protection exists. |
+| `ACP_KEYCHAIN` | unset | macOS only: path of a specific `.keychain-db` file to use instead of the session's default keychain. Needed on a Mac with no default keychain in the session (a headless machine); the CI keychain job uses it. |
 | `VENICE_MIN_PRIVACY` | unset | `private`: only zero-retention Venice models. The menu overrides it. |
 
 ## Test

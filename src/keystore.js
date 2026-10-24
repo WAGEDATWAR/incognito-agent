@@ -24,9 +24,12 @@ const attrs = (provider) => ['service', SERVICE, 'provider', provider.id];
 // could not be quoted safely (a line break or NUL) is not given to it at all.
 const securityQuote = (s) => `"${s.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`;
 const KEYCHAIN_UNSAFE = /[\0\r\n]/;
+// `ACP_KEYCHAIN=<path to a .keychain-db file>` selects a specific keychain instead of the default one. A Mac with no
+// default keychain in this session (a headless runner, an SSH session with no login) would otherwise wait for a prompt.
+const keychainPath = () => process.env.ACP_KEYCHAIN || null;
 
 function keychainLookup(run, provider) {
-  const r = run('security', ['find-generic-password', '-s', SERVICE, '-a', provider.id, '-w'], { encoding: 'utf8', timeout: 20000 });
+  const r = run('security', ['find-generic-password', '-s', SERVICE, '-a', provider.id, '-w', ...(keychainPath() ? [keychainPath()] : [])], { encoding: 'utf8', timeout: 20000 });
   const key = String(r.stdout ?? '').replace(/\r?\n$/, '');
   return r.status === 0 && key ? key : null;
 }
@@ -56,7 +59,7 @@ export function protect(backend, provider, key, run = spawnSync) {
     }
     if (backend === 'keychain') {
       if (KEYCHAIN_UNSAFE.test(key)) return null;
-      const command = `add-generic-password -U -s ${securityQuote(SERVICE)} -a ${securityQuote(provider.id)} -l ${securityQuote(`Incognito ACP (${provider.title})`)} -w ${securityQuote(key)}\nquit\n`;
+      const command = `add-generic-password -U -s ${securityQuote(SERVICE)} -a ${securityQuote(provider.id)} -l ${securityQuote(`Incognito ACP (${provider.title})`)} -w ${securityQuote(key)}${keychainPath() ? ` ${securityQuote(keychainPath())}` : ''}\nquit\n`;
       run('security', ['-i'], { input: command, encoding: 'utf8', timeout: 20000 });
       // `security -i` does not report a rejected command through its exit status, so confirm by reading the key back.
       return keychainLookup(run, provider) === key ? { scheme: 'keychain' } : null;
