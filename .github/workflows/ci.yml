@@ -77,6 +77,7 @@ jobs:
           node-version: 22
       - name: Round-trip a key through the real Keychain
         shell: bash
+        timeout-minutes: 4
         run: |
           # A throwaway default keychain, unlocked, so the test does not depend on the runner's own state.
           set +e
