@@ -1,0 +1,21 @@
+# dependencies and build output
+node_modules/
+*.tgz
+
+# secrets and local data: never commit these
+.env
+.env.*
+credentials.json
+settings.json
+sessions/
+proxy-debug.log
+
+# editors and tools
+.idea/
+.vscode/
+.claude/
+
+# scratch folders left by manual testing
+.th/
+.tmphome/
+*.tmp
