@@ -23,6 +23,15 @@ const security = (...args) => spawnSync('security', args, { encoding: 'utf8' });
 const lookup = () => security('find-generic-password', '-s', 'incognito-acp', '-a', 'anonrouter', '-w').stdout.replace(/\r?\n$/, '');
 const clear = () => security('delete-generic-password', '-s', 'incognito-acp', '-a', 'anonrouter');
 
+// Raw output of the exact commands the agent relies on, so a failure on a new machine shows why.
+{
+  const probe = spawnSync('security', ['-i'], { input: 'add-generic-password -U -s "incognito-acp-probe" -a "probe" -w "probe-secret-123"\n', encoding: 'utf8' });
+  console.log('probe add:', JSON.stringify({ status: probe.status, stdout: probe.stdout, stderr: probe.stderr }));
+  const found = spawnSync('security', ['find-generic-password', '-s', 'incognito-acp-probe', '-a', 'probe', '-w'], { encoding: 'utf8' });
+  console.log('probe find:', JSON.stringify({ status: found.status, stdout: found.stdout, stderr: found.stderr }));
+  spawnSync('security', ['delete-generic-password', '-s', 'incognito-acp-probe', '-a', 'probe']);
+}
+
 try {
   assert.equal(chooseBackend(), 'keychain', 'the Keychain should be chosen on macOS');
 

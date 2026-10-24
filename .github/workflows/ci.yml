@@ -84,10 +84,12 @@ jobs:
           security default-keychain -s ci.keychain
           security unlock-keychain -p ci-keychain ci.keychain
           security set-keychain-settings ci.keychain
+          # Lookups search the keychain list, not just the default, so put the new one first.
+          security list-keychains -d user -s ci.keychain $(security list-keychains -d user | tr -d '"')
           ACP_TEST_KEYCHAIN=1 node test/keychain.js 2>&1 | tee keychain.log
           status=${PIPESTATUS[0]}
           if [ "$status" -ne 0 ]; then
-            tail -n 25 keychain.log | while IFS= read -r line; do echo "::error::${line}"; done
+            { grep "probe" keychain.log; tail -n 25 keychain.log; } | while IFS= read -r line; do echo "::error::${line}"; done
           fi
           exit "$status"
 
