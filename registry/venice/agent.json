@@ -1,0 +1,18 @@
+{
+  "id": "venice",
+  "name": "Venice",
+  "version": "0.2.0",
+  "description": "Unofficial agent that runs Venice models in AI Chat, with a privacy floor, web search options, secret redaction and MCP support.",
+  "repository": "https://github.com/WAGEDATWAR/incognito-agent",
+  "website": "https://github.com/WAGEDATWAR/incognito-agent#readme",
+  "authors": ["WAGEDATWAR"],
+  "license": "MIT",
+  "license_url": "https://github.com/WAGEDATWAR/incognito-agent/blob/main/LICENSE",
+  "icon": "https://raw.githubusercontent.com/WAGEDATWAR/incognito-agent/main/registry/venice/icon.svg",
+  "distribution": {
+    "npx": {
+      "package": "anonrouter-venice-acp@0.2.0",
+      "args": ["venice"]
+    }
+  }
+}

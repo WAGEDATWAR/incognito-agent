@@ -2,7 +2,26 @@
   "name": "anonrouter-venice-acp",
   "version": "0.2.0",
   "description": "Unofficial Agent Client Protocol (ACP) agents for JetBrains IDEs that run Anonrouter and Venice models",
-  "keywords": ["acp", "agent-client-protocol", "jetbrains", "intellij", "ai-agent", "anonrouter", "venice", "llm", "mcp"],
+  "keywords": [
+    "acp",
+    "agent-client-protocol",
+    "jetbrains",
+    "intellij",
+    "ai-agent",
+    "anonrouter",
+    "venice",
+    "llm",
+    "mcp"
+  ],
+  "author": "WAGEDATWAR",
+  "homepage": "https://github.com/WAGEDATWAR/incognito-agent#readme",
+  "bugs": {
+    "url": "https://github.com/WAGEDATWAR/incognito-agent/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/WAGEDATWAR/incognito-agent.git"
+  },
   "type": "module",
   "bin": {
     "anonrouter-venice-acp": "bin/anonrouter-venice-acp.js",
@@ -10,11 +29,18 @@
     "venice-acp": "bin/venice-acp.js",
     "anonrouter-completion-proxy": "bin/anonrouter-completion-proxy.js"
   },
-  "files": ["bin", "src", "README.md", "LICENSE"],
-  "engines": { "node": ">=20.3" },
+  "files": [
+    "bin",
+    "src",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=20.3"
+  },
   "scripts": {
     "start": "node bin/anonrouter-venice-acp.js",
-    "test": "node test/e2e.js && node test/approval.js && node test/toollimit.js && node test/tools.js && node test/serialize.js && node test/features.js && node test/sessions.js && node test/mcp.js && node test/routing.js && node test/tickets.js && node test/privacy.js && node test/venice.js && node test/auth.js && node test/proxy.js",
+    "test": "node test/e2e.js && node test/approval.js && node test/toollimit.js && node test/tools.js && node test/serialize.js && node test/features.js && node test/sessions.js && node test/mcp.js && node test/routing.js && node test/tickets.js && node test/privacy.js && node test/icons.js && node test/venice.js && node test/auth.js && node test/proxy.js",
     "test:package": "node test/package.js"
   },
   "license": "MIT"
