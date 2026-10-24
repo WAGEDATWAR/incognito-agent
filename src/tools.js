@@ -191,6 +191,7 @@ export class ToolRunner {
         p.stderr.on('data', add);
         signal?.addEventListener('abort', () => killTree(p), { once: true });
         const timer = setTimeout(() => killTree(p), COMMAND_TIMEOUT_MS);
+        timer.unref();
         p.on('close', (code) => { clearTimeout(timer); resolve({ output: clip(out) + `\n[exit ${code}]` }); });
         p.on('error', (e) => { clearTimeout(timer); resolve({ output: `spawn error: ${e.message}` }); });
       });
@@ -207,6 +208,7 @@ export class ToolRunner {
     const onAbort = () => this.rpc.request('terminal/kill', { sessionId: this.sessionId, terminalId }).catch(() => {});
     signal?.addEventListener('abort', onAbort, { once: true });
     const timer = setTimeout(onAbort, COMMAND_TIMEOUT_MS); // a hung or interactive command must not stall the turn forever
+    timer.unref(); // but the timer alone must never keep the process alive
     try {
       const exit = await this.rpc.request('terminal/wait_for_exit', { sessionId: this.sessionId, terminalId });
       const out = await this.rpc.request('terminal/output', { sessionId: this.sessionId, terminalId });

@@ -148,7 +148,16 @@ assert.equal((await prep('edit_file', { path: 'd.txt', old_string: 'X', new_stri
 
   // Cancelling kills the terminal's command.
   calls.length = 0;
-  const slowRpc = { request: async (method, p) => { calls.push([method, p]); if (method === 'terminal/create') return { terminalId: 't2' }; if (method === 'terminal/wait_for_exit') return new Promise(() => {}); return {}; } };
+  // Like a real IDE terminal: the wait ends when the command is killed.
+  let exited;
+  const slowRpc = { request: async (method, p) => {
+    calls.push([method, p]);
+    if (method === 'terminal/create') return { terminalId: 't2' };
+    if (method === 'terminal/wait_for_exit') return new Promise((resolve) => { exited = resolve; });
+    if (method === 'terminal/kill') exited?.({ exitCode: null, signal: 'SIGKILL' });
+    if (method === 'terminal/output') return { output: '', truncated: false };
+    return {};
+  } };
   const slow = new ToolRunner({ rpc: slowRpc, sessionId: 'sid', cwd, caps: { terminal: true }, log: () => {} });
   const ac = new AbortController();
   const pending = (await prep('run_command', { command: 'sleep 99' }, slow)).execute(ac.signal, {});
@@ -156,7 +165,7 @@ assert.equal((await prep('edit_file', { path: 'd.txt', old_string: 'X', new_stri
   ac.abort();
   await new Promise((r) => setTimeout(r, 50));
   assert.ok(calls.some((c) => c[0] === 'terminal/kill'), 'abort did not kill the terminal command');
-  void pending;
+  assert.match((await pending).output, /\[exit SIGKILL\]/, 'the cancelled command did not finish');
 }
 
 // ---- approval metadata ----

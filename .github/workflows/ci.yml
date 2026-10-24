@@ -27,7 +27,17 @@ jobs:
           node-version: ${{ matrix.node }}
       # The project has no runtime dependencies, so there is nothing to install.
       - name: Unit and end-to-end tests
-        run: npm test
+        shell: bash
+        run: |
+          # On failure, show which suite failed and the end of its output as annotations (step logs are not readable
+          # without signing in).
+          set +e
+          npm test 2>&1 | tee test.log
+          status=${PIPESTATUS[0]}
+          if [ "$status" -ne 0 ]; then
+            grep -A 32 "^FAIL" test.log | head -n 60 | while IFS= read -r line; do echo "::error::${line}"; done
+          fi
+          exit "$status"
       - name: Pack the package and run it through npx
         run: npm run test:package
 
