@@ -1,5 +1,7 @@
 # ACP agents for JetBrains: Anonrouter and Venice
 
+[![CI](https://github.com/WAGEDATWAR/incognito-agent/actions/workflows/ci.yml/badge.svg)](https://github.com/WAGEDATWAR/incognito-agent/actions/workflows/ci.yml) [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+
 Unofficial, zero-dependency [Agent Client Protocol](https://agentclientprotocol.com) agents that run **Anonrouter** or **Venice** models inside JetBrains AI Chat, plus an experimental local proxy for AI Completion. Needs Node 20.3 or newer. Not affiliated with Anonrouter, Venice or JetBrains.
 
 One npm package, `anonrouter-venice-acp`, provides both agents. Pick one by name:
@@ -207,7 +209,7 @@ The agents talk only to the provider you configure (plus the control server in A
 
 ## Test
 
-`npm test` runs fourteen suites (and `npm run test:package` packs the project and runs the tarball through npx, as the registry launches it) against fake providers and a fake IDE: the agent loop with a retried stream failure, modes and approvals (deny, always allow, cancel, plan, bypass, outside-project reads), the tool-call limit policy, tool internals (regex time limit, process-tree kill), overlapping prompts, capability parsing, images, slash commands, stalls and retries, saved sessions, MCP over stdio and HTTP, routing settings, route notes and cost, private tickets (key and content on separate origins), secret redaction, sensitive-file rules, key protection, retention and `/forget`, the Venice privacy floor, the Venice adapter, the missing-key flow, and the completion proxy.
+`npm test` runs fifteen suites (and `npm run test:package` packs the project and runs the tarball through npx, as the registry launches it) against fake providers and a fake IDE: the agent loop with a retried stream failure, modes and approvals (deny, always allow, cancel, plan, bypass, outside-project reads), the tool-call limit policy, tool internals (regex time limit, process-tree kill), overlapping prompts, capability parsing, images, slash commands, stalls and retries, saved sessions, MCP over stdio and HTTP, routing settings, route notes and cost, private tickets (key and content on separate origins), secret redaction, sensitive-file rules, key protection, retention and `/forget`, the Venice privacy floor, the Venice adapter, the missing-key flow, and the completion proxy.
 
 ## Not yet verified
 
